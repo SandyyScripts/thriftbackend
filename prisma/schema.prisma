@@ -1,0 +1,667 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== ENUMS ====================
+
+// Product condition (optional - for thrift/used item stores)
+enum ItemCondition {
+  NEW_WITH_TAGS
+  NEW_WITHOUT_TAGS
+  LIKE_NEW
+  GOOD
+  FAIR
+  POOR
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  SOLD
+  RESERVED
+  ARCHIVED
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum ShippingStatus {
+  PENDING
+  LABEL_CREATED
+  PICKED_UP
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  RETURNED
+  EXCEPTION
+}
+
+enum AddressType {
+  SHIPPING
+  BILLING
+}
+
+enum CouponType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  FREE_SHIPPING
+}
+
+// ==================== USER ====================
+
+model User {
+  id                      String    @id @default(cuid())
+  name                    String?
+  email                   String?   @unique
+  password                String?
+  image                   String?
+  provider                String    @default("local")
+  providerId              String?   @unique
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  refreshToken            String?
+  resetToken              String?
+  resetTokenExpiry        DateTime?
+  role                    String    @default("user")
+  isVerified              Boolean   @default(false)
+  phone                   String?
+  verificationTokenExpiry DateTime?
+  verificationTokenHash   String?
+
+  // Relations
+  cartItems CartItem[]
+  orders    Order[]
+  wishlists Wishlist[]
+  addresses Address[]
+  reviews   Review[]
+}
+
+// ==================== ADDRESS ====================
+
+model Address {
+  id           String      @id @default(cuid())
+  userId       String?
+  type         AddressType @default(SHIPPING)
+  isDefault    Boolean     @default(false)
+
+  // Contact info
+  firstName    String
+  lastName     String
+  company      String?
+  phone        String?
+
+  // Address fields
+  addressLine1 String
+  addressLine2 String?
+  city         String
+  state        String
+  postalCode   String
+  country      String      @default("US")
+
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  // Relations
+  user          User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shippingOrders Order[] @relation("ShippingAddress")
+  billingOrders  Order[] @relation("BillingAddress")
+
+  @@index([userId])
+  @@index([type])
+  @@index([isDefault])
+}
+
+// ==================== CATEGORY ====================
+
+model Category {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  slug         String   @unique
+  description  String?
+  imageUrl     String?
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  subcategories SubCategory[]
+  products      Product[]
+
+  @@index([isActive])
+  @@index([slug])
+}
+
+model SubCategory {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String
+  categoryId   String
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  category Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([categoryId, slug])
+  @@index([categoryId])
+  @@index([isActive])
+}
+
+// ==================== PRODUCT ====================
+
+model Product {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
+  // Pricing
+  price               Float   // Current selling price
+  originalRetailPrice Float?  // Original retail price (if known)
+  compareAtPrice      Float?  // Strikethrough price for sales
+
+  // Thrift-specific attributes (optional - for used item stores)
+  condition    ItemCondition? // Optional: null = new product
+  measurements Json?          // { chest: "40in", length: "28in", ... }
+
+  // Common attributes
+  size     String?
+  brand    String?
+  color    String?
+  material String?
+
+  // Categorization
+  categoryId    String
+  subcategoryId String?
+  tags          String[] // Additional searchable tags
+
+  // Media - multiple images per product
+  images        String[] // Array of Cloudinary URLs
+  cloudinaryIds String[] // For deletion
+
+  // Inventory (for products without variants)
+  stock Int @default(0)
+  lowStockThreshold Int @default(5)
+
+  // Status
+  status     ProductStatus @default(DRAFT)
+  isFeatured Boolean       @default(false)
+
+  // Sale/Promotion flags
+  isOnSale       Boolean   @default(false)
+  salePercentage Float?    // e.g., 20 for 20% off
+  saleEndsAt     DateTime? // For countdown timers
+
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  publishedAt DateTime? // When made active
+  soldAt      DateTime? // When purchased
+
+  // SKU
+  sku String @unique
+
+  // Relations
+  category     Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  subcategory  SubCategory?     @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
+  variants     ProductVariant[]
+  cartItems    CartItem[]
+  orderItems   OrderItem[]
+  wishlists    Wishlist[]
+  priceHistory PriceHistory[]
+  reviews      Review[]
+
+  @@index([status])
+  @@index([categoryId])
+  @@index([subcategoryId])
+  @@index([condition])
+  @@index([brand])
+  @@index([isOnSale])
+  @@index([isFeatured])
+  @@index([price])
+  @@index([createdAt])
+}
+
+// ==================== PRODUCT VARIANT ====================
+
+model ProductVariant {
+  id        String @id @default(cuid())
+  productId String
+  sku       String @unique
+  name      String // e.g., "Blue / Large"
+
+  // Variant attributes
+  size     String?
+  color    String?
+  material String?
+
+  // Pricing (can override product price)
+  price          Float? // If null, use product.price
+  compareAtPrice Float?
+
+  // Inventory
+  stock             Int @default(0)
+  lowStockThreshold Int @default(5)
+
+  // Media
+  images String[]
+
+  // Status
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@index([productId])
+  @@index([isActive])
+  @@index([sku])
+}
+
+// ==================== ORDER ====================
+
+model Order {
+  id        String      @id @default(cuid())
+  userId    String?
+  guestId   String?
+  guestEmail String?
+
+  // Status
+  status         OrderStatus    @default(PENDING)
+  paymentStatus  PaymentStatus  @default(PENDING)
+  shippingStatus ShippingStatus @default(PENDING)
+
+  // Totals
+  subtotal       Float
+  discountAmount Float   @default(0)
+  shippingCost   Float   @default(0)
+  taxAmount      Float   @default(0)
+  total          Float
+
+  // Address references
+  shippingAddressId String?
+  billingAddressId  String?
+  shippingAddressSnapshot Json? // Snapshot at time of order
+  billingAddressSnapshot  Json?
+
+  // Coupon
+  couponId   String?
+  couponCode String?
+
+  // Notes
+  orderNotes    String?
+  internalNotes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Shipping details
+  shipmentId       String?
+  trackingNumber   String?
+  trackingUrl      String?
+  shippingLabelUrl String?
+  shippingCarrier  String?
+  shippingService  String?
+  shippingError    String?
+  estimatedDelivery DateTime?
+
+  // Relations
+  user            User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  shippingAddress Address?    @relation("ShippingAddress", fields: [shippingAddressId], references: [id], onDelete: SetNull)
+  billingAddress  Address?    @relation("BillingAddress", fields: [billingAddressId], references: [id], onDelete: SetNull)
+  coupon          Coupon?     @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  orderItems      OrderItem[]
+  payments        Payment[]
+
+  @@index([userId])
+  @@index([guestId])
+  @@index([guestEmail])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([shippingStatus])
+  @@index([trackingNumber])
+  @@index([createdAt])
+  @@index([couponId])
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  productId String?
+  variantId String?
+  quantity  Int      @default(1)
+  price     Float    // Price at time of order
+  total     Float
+  createdAt DateTime @default(now())
+
+  // Product snapshot fields (preserved if product is deleted)
+  productName      String?
+  productSku       String?
+  productCondition String?
+  productSize      String?
+  productBrand     String?
+  productImage     String?
+  variantName      String?
+
+  // Relations
+  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([variantId])
+}
+
+// ==================== PAYMENT ====================
+
+model Payment {
+  id      String @id @default(cuid())
+  orderId String
+
+  // Payment details
+  provider      String        // "stripe", "paypal", etc.
+  transactionId String?       @unique
+  status        PaymentStatus @default(PENDING)
+
+  // Amounts
+  amount   Float
+  currency String @default("USD")
+  fee      Float? // Payment processor fee
+
+  // Refund tracking
+  refundedAmount Float   @default(0)
+  refundReason   String?
+
+  // Payment method info
+  paymentMethod String? // "card", "bank_transfer", etc.
+  last4         String? // Last 4 digits of card
+  cardBrand     String? // "visa", "mastercard", etc.
+
+  // Metadata
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([transactionId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ==================== CART ====================
+
+model CartItem {
+  id        String   @id @default(cuid())
+  userId    String?
+  guestId   String?
+  productId String
+  variantId String?
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user    User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  // Prevent same product/variant being added twice by same user/guest
+  @@unique([userId, productId, variantId])
+  @@unique([guestId, productId, variantId])
+  @@index([userId])
+  @@index([guestId])
+  @@index([productId])
+  @@index([variantId])
+}
+
+// ==================== WISHLIST ====================
+
+model Wishlist {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([productId])
+}
+
+// ==================== REVIEW ====================
+
+model Review {
+  id        String @id @default(cuid())
+  productId String
+  userId    String
+
+  // Review content
+  rating  Int     // 1-5
+  title   String?
+  comment String?
+
+  // Moderation
+  isVerifiedPurchase Boolean @default(false)
+  isApproved         Boolean @default(false)
+
+  // Engagement
+  helpfulCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, userId]) // One review per user per product
+  @@index([productId])
+  @@index([userId])
+  @@index([rating])
+  @@index([isApproved])
+}
+
+// ==================== COUPON ====================
+
+model Coupon {
+  id          String     @id @default(cuid())
+  code        String     @unique
+  description String?
+
+  // Discount
+  type  CouponType
+  value Float      // Percentage or fixed amount
+
+  // Constraints
+  minimumOrderAmount Float?
+  maximumDiscount    Float? // Cap for percentage discounts
+
+  // Usage limits
+  usageLimit   Int? // Total uses allowed
+  usageCount   Int  @default(0)
+  perUserLimit Int  @default(1)
+
+  // Targeting (empty array = all products/categories)
+  applicableProductIds  String[]
+  applicableCategoryIds String[]
+  excludedProductIds    String[]
+
+  // Validity
+  startsAt  DateTime
+  expiresAt DateTime
+  isActive  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  orders Order[]
+
+  @@index([code])
+  @@index([isActive])
+  @@index([expiresAt])
+}
+
+// ==================== SALES & PROMOTIONS ====================
+
+model Sale {
+  id            String  @id @default(cuid())
+  name          String
+  description   String?
+  discountType  String  // "percentage" or "fixed"
+  discountValue Float   // 20 (for 20%) or 5.00 (for $5 off)
+
+  // Targeting
+  applyTo     String   @default("all") // "all", "category", "products", "tags"
+  categoryIds String[]
+  productIds  String[]
+  tags        String[]
+
+  // Timing
+  startsAt DateTime
+  endsAt   DateTime
+  isActive Boolean  @default(true)
+
+  // Display
+  showCountdown Boolean @default(false)
+  bannerText    String?
+  bannerColor   String? @default("#FF5733")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([startsAt])
+  @@index([endsAt])
+}
+
+// ==================== PRICING MANAGEMENT ====================
+
+model PricingRule {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
+  // Rule Type: markup, markdown, fixed_adjustment, price_floor, price_ceiling
+  ruleType String
+
+  // Adjustment
+  adjustmentType  String // "percentage" or "fixed"
+  adjustmentValue Float  // e.g., 15 (for 15% markup) or -5.00 (for $5 off)
+
+  // Targeting
+  applyTo        String   @default("all") // "all", "category", "subcategory", "condition", "brand", "price_range"
+  categoryIds    String[]
+  subcategoryIds String[]
+  conditions     String[] // ItemCondition values as strings
+  brands         String[]
+  minPrice       Float?
+  maxPrice       Float?
+
+  // Priority (higher = applied later, can override)
+  priority Int @default(0)
+
+  // Status
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([ruleType])
+  @@index([priority])
+}
+
+model PricingConfig {
+  id String @id @default(cuid())
+
+  // Global markup/margin settings
+  defaultMarkupPercent Float @default(0)
+  minimumMargin        Float @default(0)
+
+  // Rounding rules: none, round_up, round_down, nearest_99
+  roundingRule String @default("none")
+
+  // Price floors by condition (for thrift stores)
+  minPriceNewWithTags    Float @default(5.00)
+  minPriceNewWithoutTags Float @default(4.50)
+  minPriceLikeNew        Float @default(4.00)
+  minPriceGood           Float @default(3.00)
+  minPriceFair           Float @default(2.00)
+  minPricePoor           Float @default(1.00)
+
+  // Bulk pricing adjustments tracking
+  lastBulkUpdate      DateTime?
+  lastBulkUpdateType  String?
+  lastBulkUpdateValue Float?
+
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
+
+model PriceHistory {
+  id            String   @id @default(cuid())
+  productId     String
+  previousPrice Float
+  newPrice      Float
+  changeReason  String   // "manual", "pricing_rule", "bulk_update", "sale"
+  ruleId        String?  // If changed by a pricing rule
+  changedBy     String?  // Admin user ID
+  createdAt     DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([createdAt])
+  @@index([changeReason])
+}
+
+// ==================== BULK OPERATION TRACKING ====================
+
+model BulkPriceUpdate {
+  id              String    @id @default(cuid())
+  adjustmentType  String    // "percentage" or "fixed"
+  adjustmentValue Float
+  applyTo         String    // What was targeted
+  targetIds       String[]  // Category IDs, product IDs, etc.
+  affectedCount   Int       // Number of products updated
+  createdAt       DateTime  @default(now())
+  createdBy       String?   // Admin user ID
+  isReverted      Boolean   @default(false)
+  revertedAt      DateTime?
+  revertedBy      String?
+}
