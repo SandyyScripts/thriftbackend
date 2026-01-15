@@ -42,6 +42,7 @@ app.use(securityHeaders);
 
 // CORS configuration
 const allowedOrigins = [
+  "https://thriftclock.vercel.app",
   "https://licorice4good.com",
   "https://www.licorice4good.com",
   "https://api.licorice4good.com",
