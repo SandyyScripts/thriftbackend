@@ -166,7 +166,7 @@ class OrderVerificationService {
 
         // Check for cancelled orders
         const cancelledOrders = user.orders.filter(
-          (order) => order.status === "cancelled"
+          (order) => order.status === "CANCELLED"
         );
         if (cancelledOrders.length > 2) {
           flags.push("MULTIPLE_CANCELLATIONS");

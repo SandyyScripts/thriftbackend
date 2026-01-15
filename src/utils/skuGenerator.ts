@@ -1,151 +1,82 @@
-import { PrismaClient } from "../generated/prisma";
-
-const prisma = new PrismaClient();
-
-// Dynamic SKU Generation Functions
-
-/**
- * Generate flavor code from flavor name
- * "Red Twist" → "RED"
- * "Blue Raspberry" → "BLU"
- * "Fruit Rainbow" → "FRU"
- */
-export const generateFlavorCode = (name: string): string => {
-  return name
-    .split(" ")
-    .map((word) => word.substring(0, 3).toUpperCase())
-    .join("");
-};
+// SKU Generation Functions for Thrift Store
 
 /**
  * Generate category code from category name
- * "Traditional" → "TRA"
- * "Sour" → "SOU"
- * "Sweet" → "SWE"
+ * "Ethnic Wear" → "ETH"
+ * "Western Wear" → "WES"
  */
 export const generateCategoryCode = (category: string): string => {
   return category.substring(0, 3).toUpperCase();
 };
 
 /**
- * Generate SKU for custom 3-pack
- * @param flavorNames Array of flavor names
- * @returns Generated SKU (e.g., "3P-CUST-RED-BLU-FRU")
+ * Generate product code from product name
+ * "Vintage Cotton Kurta" → "VIN-COT"
  */
-export const generateCustomSKU = (flavorNames: string[]): string => {
-  const codes = flavorNames.map((name) => generateFlavorCode(name));
-  return `3P-CUST-${codes.join("-")}`;
+export const generateProductCode = (name: string): string => {
+  const words = name.split(" ");
+  if (words.length >= 2) {
+    return `${words[0].substring(0, 3).toUpperCase()}-${words[1].substring(0, 3).toUpperCase()}`;
+  }
+  return name.substring(0, 6).toUpperCase();
 };
 
 /**
- * Generate SKU for predefined pack recipe
- * @param kind Category (Traditional, Sour, Sweet)
- * @param items Array of flavor items with quantities
- * @returns Generated SKU (e.g., "3P-TRA-REDx3")
+ * Generate SKU for a product
+ * @param categoryCode Category code
+ * @param productCode Product code  
+ * @param uniqueId Unique identifier (random or sequential)
+ * @returns Generated SKU (e.g., "ETH-VIN-COT-1234")
  */
 export const generateSKU = (
-  kind: string,
-  items: Array<{ flavor: { name: string }; quantity: number }>
+  categoryCode: string,
+  productCode: string,
+  uniqueId?: string
 ): string => {
-  const kindCode = generateCategoryCode(kind);
-  const components = items.map((item) => {
-    const flavorCode = generateFlavorCode(item.flavor.name);
-    return item.quantity > 1 ? `${flavorCode}x${item.quantity}` : flavorCode;
-  });
-  return `3P-${kindCode}-${components.join("-")}`;
+  const id = uniqueId || Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  return `${categoryCode}-${productCode}-${id}`;
 };
 
 /**
- * Get default price for product type
- * @param productType Product type (3-pack, 5-pack, etc.)
- * @returns Default price
+ * Generate a complete SKU from product details
+ * @param categoryName Category name
+ * @param productName Product name
+ * @returns Generated SKU
  */
-export const getDefaultPrice = async (productType: string): Promise<number> => {
-  // Try to get from environment variable first
-  const envPrice =
-    process.env[`DEFAULT_${productType.toUpperCase().replace("-", "_")}_PRICE`];
-  if (envPrice) {
-    return parseFloat(envPrice);
-  }
+export const generateProductSKU = (
+  categoryName: string,
+  productName: string
+): string => {
+  const categoryCode = generateCategoryCode(categoryName);
+  const productCode = generateProductCode(productName);
+  return generateSKU(categoryCode, productCode);
+};
 
-  // Fallback to hardcoded defaults
+/**
+ * Get default price for product condition
+ * @param condition Product condition
+ * @returns Default minimum price
+ */
+export const getDefaultPriceByCondition = (condition: string): number => {
   const defaultPrices: { [key: string]: number } = {
-    "3-pack": 27.0,
-    "5-pack": 45.0,
+    "NEW_WITH_TAGS": 50.00,
+    "NEW_WITHOUT_TAGS": 40.00,
+    "LIKE_NEW": 30.00,
+    "GOOD": 20.00,
+    "FAIR": 10.00,
+    "POOR": 5.00,
   };
 
-  return defaultPrices[productType] || 0;
+  return defaultPrices[condition] || 15.00;
 };
 
 /**
- * Validate if product type is supported
- * @param productType Product type to validate
- * @returns True if supported
+ * Validate SKU format
+ * @param sku SKU to validate
+ * @returns True if valid format
  */
-export const isValidProductType = async (
-  productType: string
-): Promise<boolean> => {
-  // Check environment variable for supported types
-  const supportedTypes = process.env.SUPPORTED_PRODUCT_TYPES?.split(",") || [
-    "3-pack",
-    "5-pack",
-  ];
-  return supportedTypes.includes(productType);
-};
-
-/**
- * Validate if category is supported
- * @param category Category to validate
- * @returns True if supported
- */
-export const isValidCategory = async (category: string): Promise<boolean> => {
-  // Check environment variable for supported categories
-  const supportedCategories = process.env.SUPPORTED_CATEGORIES?.split(",") || [
-    "Traditional",
-    "Sour",
-    "Sweet",
-  ];
-  return supportedCategories.includes(category);
-};
-
-/**
- * Get all available categories from database
- * @returns Array of unique categories
- */
-export const getAvailableCategories = async (): Promise<string[]> => {
-  const categories = await prisma.product.findMany({
-    select: { category: true },
-    distinct: ["category"],
-    where: { isActive: true },
-  });
-
-  return categories.map((cat) => cat.category);
-};
-
-/**
- * Get all available flavors from database
- * @returns Array of active flavors
- */
-export const getAvailableFlavors = async () => {
-  return await prisma.flavor.findMany({
-    where: { active: true },
-    select: { id: true, name: true, aliases: true },
-  });
-};
-
-/**
- * Validate if flavor exists in database
- * @param flavorName Flavor name to validate
- * @returns Flavor object if exists, null otherwise
- */
-export const validateFlavor = async (flavorName: string) => {
-  return await prisma.flavor.findFirst({
-    where: {
-      OR: [
-        { name: { equals: flavorName, mode: "insensitive" } },
-        { aliases: { has: flavorName } },
-      ],
-      active: true,
-    },
-  });
+export const isValidSKU = (sku: string): boolean => {
+  // Format: XXX-XXX-XXX-XXXX (category-product-id)
+  const skuPattern = /^[A-Z]{3}-[A-Z]{3}-[A-Z]{3}-\d{4}$/;
+  return skuPattern.test(sku);
 };

@@ -432,7 +432,7 @@ export const createShipment = async (
         trackingNumber: trackingNumber,
         trackingUrl: trackingUrl,
         shippingLabelUrl: labelUrl,
-        shippingStatus: 'label_created',
+        shippingStatus: 'LABEL_CREATED',
         shippingCarrier: carrier,
         shippingService: service,
         shippingCost: cost,
@@ -521,7 +521,7 @@ const handleTransactionCreated = async (data: any) => {
   await prisma.order.updateMany({
     where: { shipmentId: data.objectId },
     data: {
-      shippingStatus: 'label_created',
+      shippingStatus: 'LABEL_CREATED',
       updatedAt: new Date(),
     },
   });
