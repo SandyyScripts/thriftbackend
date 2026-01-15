@@ -7,7 +7,7 @@
  * Run with: node src/scripts/fix-payment-status.js
  */
 
-const { PrismaClient } = require('../generated/prisma');
+const { PrismaClient } = require('@prisma/client');
 const Stripe = require('stripe');
 
 const prisma = new PrismaClient();
@@ -19,7 +19,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 
 async function fixPaymentStatus() {
   console.log('🔧 Starting payment status fix...');
-  
+
   try {
     // Get all orders with pending payment status
     const pendingOrders = await prisma.order.findMany({
@@ -45,7 +45,7 @@ async function fixPaymentStatus() {
     // Process each pending order
     for (const order of pendingOrders) {
       console.log(`\n🔍 Checking order ${order.id}...`);
-      
+
       try {
         // Search for checkout sessions with this order ID
         const sessions = await stripe.checkout.sessions.list({
@@ -58,7 +58,7 @@ async function fixPaymentStatus() {
 
         if (!orderSession) {
           console.log(`❌ No Stripe session found for order ${order.id}`);
-          
+
           // If order is older than 24 hours and no session found, mark as failed
           const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
           if (order.createdAt < oneDayAgo) {
@@ -124,11 +124,11 @@ async function fixPaymentStatus() {
     const updatedPendingCount = await prisma.order.count({
       where: { paymentStatus: 'pending' }
     });
-    
+
     const paidCount = await prisma.order.count({
       where: { paymentStatus: 'paid' }
     });
-    
+
     const totalFailedCount = await prisma.order.count({
       where: { paymentStatus: 'failed' }
     });

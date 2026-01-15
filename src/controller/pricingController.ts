@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { ProductStatus, ItemCondition } from "../generated/prisma";
+import { ProductStatus, ItemCondition } from "@prisma/client";
 import { prisma } from "../config/database";
 
 // ==================== PRICING RULES ====================

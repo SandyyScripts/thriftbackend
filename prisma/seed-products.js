@@ -20,7 +20,7 @@ var __rest = (this && this.__rest) || function (s, e) {
     return t;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const prisma_1 = require("../src/generated/prisma");
+const prisma_1 = require("@prisma/client");
 const prisma = new prisma_1.PrismaClient();
 function main() {
     return __awaiter(this, void 0, void 0, function* () {

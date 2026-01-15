@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { PrismaClient, ItemCondition, ProductStatus } from "../generated/prisma";
+import { PrismaClient, ItemCondition, ProductStatus } from "@prisma/client";
 import { uploadToCloudinary, deleteFromCloudinary } from "../config/cloudinary";
 import { prisma } from "../config/database";
 

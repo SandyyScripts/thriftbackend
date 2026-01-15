@@ -3,7 +3,7 @@ import {
   ItemCondition,
   ProductStatus,
   CouponType,
-} from "../src/generated/prisma";
+} from "@prisma/client";
 
 const prisma = new PrismaClient();
 

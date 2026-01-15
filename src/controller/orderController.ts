@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../config/database";
-import { OrderStatus, PaymentStatus, ShippingStatus } from "../generated/prisma";
+import { OrderStatus, PaymentStatus, ShippingStatus } from "@prisma/client";
 
 // Create order from cart or direct order items (checkout)
 export const createOrder = async (req: Request, res: Response) => {

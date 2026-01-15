@@ -22,7 +22,7 @@ const createMockPrismaModel = () => ({
 });
 
 // Mock the PrismaClient constructor
-jest.mock("../src/generated/prisma", () => ({
+jest.mock("@prisma/client", () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({
     user: createMockPrismaModel(),
     product: createMockPrismaModel(),

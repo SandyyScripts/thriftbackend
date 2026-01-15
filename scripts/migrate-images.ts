@@ -1,5 +1,5 @@
 
-import { PrismaClient } from '../src/generated/prisma';
+import { PrismaClient } from '@prisma/client';
 import cloudinary from '../src/config/cloudinary';
 
 const prisma = new PrismaClient();

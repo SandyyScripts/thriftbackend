@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { validateAddress, getShippingRates, createShipment, handleWebhookEvent } from '../services/shippoService';
-import { PrismaClient } from '../generated/prisma';
+import { PrismaClient } from '@prisma/client';
 import { prisma } from "../config/database";
 
 // Validate shipping address

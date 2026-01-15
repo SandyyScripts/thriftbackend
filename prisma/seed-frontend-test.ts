@@ -1,5 +1,5 @@
 
-import { PrismaClient, ProductStatus, ItemCondition } from '../src/generated/prisma';
+import { PrismaClient, ProductStatus, ItemCondition } from '@prisma/client';
 
 const prisma = new PrismaClient();
 

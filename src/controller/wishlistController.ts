@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { PrismaClient, ProductStatus } from "../generated/prisma";
+import { PrismaClient, ProductStatus } from "@prisma/client";
 import { prisma } from "../config/database";
 
 // ==================== WISHLIST ENDPOINTS ====================
